@@ -246,7 +246,7 @@ void TIME_Init(void)
 
     TIM_TimeBaseInitStructure.TIM_ClockDivision = 0U;
     TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
-    TIM_TimeBaseInitStructure.TIM_Period = (1U << 8);
+    TIM_TimeBaseInitStructure.TIM_Period = (1U << 8U) - 1U; // resets after this numbers
     TIM_TimeBaseInitStructure.TIM_Prescaler = 0U;
     TIM_TimeBaseInitStructure.TIM_RepetitionCounter = 0U;
     TIM_TimeBaseInit(TIM1, &TIM_TimeBaseInitStructure);
