@@ -270,6 +270,7 @@ void TIME_Init(void)
 #define C_B_MASK ((1U << (C_B_NUM + 1)) - 1U)
 #define C_LONG_PRESS (C_CPS * 3U)
 #define C_SHORT_INTVL (1U << 6U)
+#define C_REALLY_LONG (C_CPS * 60U * 60U * 12U)
 
 // macros
 #define RE_MIN (((last_c_b_vec & C_B_MIN) == 0) && ((c_b_vec & C_B_MIN) != 0))
@@ -277,12 +278,42 @@ void TIME_Init(void)
 #define MIN ((c_b_vec & C_B_MIN) != 0)
 #define HOUR ((c_b_vec & C_B_HR) != 0)
 #define BTN_TIMER_EXPIRE (t1_count - re_btn_count >= btn_target)
+#define HR_EVT (RE_HOUR || (HOUR && BTN_TIMER_EXPIRE))
 
 u8 bcd[6] = {0};
 u8 chd[4] = {0};
 u8 last_upd_bcd = 0;
 u8 last_chd[4] = {0};
 
+typedef enum
+{
+  s_sm_idle = 0,
+  s_sm_hold,
+  s_sm_disp
+} s_sm_t;
+
+// seconds state machine
+typedef union
+{
+    struct {
+        u8 btn_ct:6;
+        s_sm_t state :2;
+    } e;
+    u8 b;
+} ssm_t;
+
+ssm_t ssmOut;
+u32 ssm_ct;
+
+typedef enum
+{
+    h_sm_idle = 0,
+    h_sm_single,
+    h_sm_double,
+    h_sm_triple
+} h_sm_t;
+
+h_sm_t hr_sm = h_sm_idle;
 void nof_hour(void) {
     if (bcd[1] == 10) {
         bcd[0] += 1;
@@ -312,6 +343,47 @@ void nof_min_sec(u8 sec, u8 inh)
     }
 }
 
+void dec_hr(void)
+{
+    if (bcd[1] == 0)
+    {
+        if (bcd[0] == 0) // 00 -> 23
+        {
+            bcd[1] = 3;
+            bcd[0] = 2;
+        }
+        else if (bcd[0] == 1) // 10 -> 09
+        {
+            bcd[1] = 9;
+            bcd[0] = 0;
+        }
+        else if (bcd[0] == 2) // 20 -> 19
+        {
+            bcd[1] = 9;
+            bcd[0] = 1;
+        }
+    }
+    else
+    {
+        bcd[1] -= 1;
+    }
+}
+
+u8 hr_dir = 0;
+
+void change_hr(void)
+ {
+    if (hr_dir == 0)
+    {
+        bcd[1] += 1;
+        nof_hour();
+    }
+    else
+    {
+        dec_hr();
+    }
+}
+
 /*********************************************************************
  * @fn      main
  *
@@ -332,6 +404,8 @@ int main(void)
 	u32 deb_btn_count = 0;
 	u32 re_btn_count = 0;
 	u32 btn_target = 0;
+	u32 hr_dir_count = 0U - C_REALLY_LONG;
+	u8 auto_seconds = 0;
     SystemCoreClockUpdate();
 
     APP_GPIO_Init();
@@ -390,22 +464,108 @@ int main(void)
         // hours
         nof_hour();
 
-        if (HOUR && MIN)
+        // transition
+        switch (ssmOut.e.state)
         {
-            disp_sec = 1;
-            if (BTN_TIMER_EXPIRE)
+        case s_sm_idle:
+            if (HOUR && MIN)
+            {
+                ssm_ct = t1_count;
+                ssmOut.e.state = s_sm_hold;
+                ssmOut.e.btn_ct = 1;
+            }
+            break;
+        case s_sm_hold:
+            if (HOUR && MIN && BTN_TIMER_EXPIRE)
             {
                 re_btn_count = t1_count - C_LONG_PRESS;
                 last_sec = t1_count;
                 bcd[5] = 0;
                 bcd[4] = 0;
             }
-        }
-        else {
-            if (RE_HOUR || (HOUR && BTN_TIMER_EXPIRE))
+            if (t1_count - ssm_ct >= C_LONG_PRESS)
             {
-                bcd[1] += 1;
-                nof_hour();
+                ssm_ct = t1_count - C_LONG_PRESS;
+            }
+            // either button is released
+            if (!HOUR || !MIN)
+            {
+                if (t1_count - ssm_ct >= C_LONG_PRESS)
+                {
+                    ssmOut.e.state = s_sm_idle;
+                }
+                else
+                {
+                    ssmOut.e.state = s_sm_disp;
+                }
+            }
+            break;
+        case s_sm_disp:
+            if (RE_HOUR && RE_MIN)
+            {
+                if (ssmOut.e.btn_ct < ((1U << 6U) - 1U))
+                {
+                    ssmOut.e.btn_ct += 1;
+                }
+                ssm_ct = t1_count;
+            }
+            // timeout seconds display
+            // and apply selected setting
+            if (t1_count - ssm_ct >= C_LONG_PRESS)
+            {
+                ssmOut.e.state = s_sm_idle;
+                if (ssmOut.e.btn_ct == 2)
+                {
+                    auto_seconds ^= 1;
+                }
+                ssmOut.e.btn_ct = 0;
+            }
+            break;
+        }
+
+        if (ssmOut.e.state != s_sm_idle)
+        {
+            disp_sec = 1;
+        }
+        else
+        {
+            if (HR_EVT)
+            {
+                auto_seconds = 0;
+                switch(hr_sm)
+                {
+                case h_sm_idle:
+                    change_hr();
+                    hr_dir_count = t1_count;
+                    hr_sm = h_sm_single;
+                    break;
+                case h_sm_single:
+                    hr_dir ^= 1; // reverse direction
+                    change_hr();
+                    change_hr();
+                    hr_dir_count = t1_count;
+                    hr_sm = h_sm_double;
+                    break;
+                case h_sm_double:
+                    // set hour direction to increment
+                    if (hr_dir)
+                    {
+                        hr_dir = 0;
+                        change_hr();
+                        change_hr();
+                        change_hr();
+                    }
+                    else
+                    {
+                        change_hr();
+                    }
+                    hr_sm = h_sm_triple;
+                    hr_dir_count = t1_count;
+                    break;
+                case h_sm_triple:
+                    change_hr();
+                    hr_dir_count = t1_count;
+                }
                 if (BTN_TIMER_EXPIRE)
                 {
                     btn_target = C_SHORT_INTVL;
@@ -417,6 +577,7 @@ int main(void)
             {
                 bcd[3] += 1;
                 nof_min_sec(0, 1);
+                auto_seconds = 0;
                 if (BTN_TIMER_EXPIRE)
                 {
                     btn_target = C_SHORT_INTVL;
@@ -425,21 +586,49 @@ int main(void)
             }
         }
 
+        if (t1_count - hr_dir_count >= C_REALLY_LONG)
+        {
+            // overflow prevention? is it necessary?
+            // hr_dir_count = t1_count - C_REALLY_LONG;
+            hr_sm = h_sm_idle;
+        }
+
         for (i = 0; i < 4; i++)
         {
-            if (!disp_sec)
+            if (disp_sec || (auto_seconds && (bcd[5] < 5)))
             {
-                chd[i] = char_lut(bcd[i] & 0xF) | ((i == 1 && overrun) ? 0x80 : 0);
+                switch(i)
+                {
+                case 0:
+                    chd [i] = (ssmOut.e.btn_ct == 5) ? 0x80 : 0;
+                    break;
+                case 1:
+                    chd[1] = (ssmOut.e.btn_ct == 4) ? 0x80 : 0;
+                    break;
+                case 2:
+                    chd[i] = char_lut(bcd[i + 2U] & 0xF) | (ssmOut.e.btn_ct == 3 ? 0x80 : 0);
+                    break;
+                case 3:
+                    chd[i] = char_lut(bcd[i + 2U] & 0xF) | (ssmOut.e.btn_ct == 2 ? 0x80 : 0);
+                    break;
+                }
             }
             else
             {
-                if (i < 2)
+                switch(i)
                 {
-                    chd[i] = 0;
-                }
-                else
-                {
-                    chd[i] = char_lut(bcd[i + 2U] & 0xF);
+                case 0:
+                    chd[i] = char_lut(bcd[i] & 0xF);
+                    break;
+                case 1:
+                    chd[i] = char_lut(bcd[i] & 0xF) | (overrun ? 0x80 : 0);
+                    break;
+                case 2:
+                    chd[i] = char_lut(bcd[i] & 0xF);
+                    break;
+                case 3:
+                    chd[i] = char_lut(bcd[i] & 0xF) | (auto_seconds ? 0x80 : 0);
+                    break;
                 }
             }
         }
