@@ -21,7 +21,8 @@ User/main.o: ../User/main.c \
  C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_usart.h \
  C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_wwdg.h \
  C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_opa.h \
- C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x.h
+ C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x.h \
+ ../User/init.h
 C:\Users\bklu\Projects\wall_clock_controller\Debug/debug.h:
 C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x.h:
 C:\Users\bklu\Projects\wall_clock_controller\Core/core_riscv.h:
@@ -45,3 +46,4 @@ C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_usart.h:
 C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_wwdg.h:
 C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x_opa.h:
 C:\Users\bklu\Projects\wall_clock_controller\Peripheral\inc/ch32v00x.h:
+../User/init.h:

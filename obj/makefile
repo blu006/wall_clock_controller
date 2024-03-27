@@ -53,7 +53,7 @@ all: wall_clock_controller.elf secondary-outputs
 
 # Tool invocations
 wall_clock_controller.elf: $(OBJS) $(USER_OBJS)
-	@	@	riscv-none-elf-gcc -march=rv32ecxw -mabi=ilp32e -msmall-data-limit=0 -msave-restore -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -Wunused -Wuninitialized  -g -T "C:\Users\bklu\Projects\wall_clock_controller\Ld\Link.ld" -nostartfiles -Xlinker --gc-sections -Wl,-Map,"wall_clock_controller.map" --specs=nano.specs --specs=nosys.specs -o "wall_clock_controller.elf" $(OBJS) $(USER_OBJS) $(LIBS) -lprintf
+	@	@	riscv-none-elf-gcc -march=rv32ecxw -mabi=ilp32e -msmall-data-limit=0 -msave-restore -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -flto -Wunused -Wuninitialized -Wall -Wfloat-equal  -g -T "C:\Users\bklu\Projects\wall_clock_controller\Ld\Link.ld" -nostartfiles -Xlinker --gc-sections -Wl,-Map,"wall_clock_controller.map" --specs=nano.specs --specs=nosys.specs -o "wall_clock_controller.elf" $(OBJS) $(USER_OBJS) $(LIBS) -lprintf
 	@	@
 wall_clock_controller.hex: wall_clock_controller.elf
 	@	riscv-none-elf-objcopy -O ihex "wall_clock_controller.elf"  "wall_clock_controller.hex"
