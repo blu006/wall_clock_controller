@@ -4,6 +4,7 @@ encoding//Debug/debug.c=GBK
 encoding//Peripheral/inc/ch32v00x.h=GBK
 encoding//Peripheral/inc/ch32v00x_gpio.h=GBK
 encoding//Peripheral/inc/ch32v00x_i2c.h=GBK
+encoding//Peripheral/inc/ch32v00x_tim.h=GBK
 encoding//Peripheral/src/ch32v00x_gpio.c=GBK
 encoding//Peripheral/src/ch32v00x_i2c.c=GBK
 encoding//Peripheral/src/ch32v00x_iwdg.c=GBK

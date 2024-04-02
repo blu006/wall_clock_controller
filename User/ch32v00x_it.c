@@ -45,7 +45,30 @@ void HardFault_Handler(void)
 
 void TIM1_UP_IRQHandler(void)
 {
+	uint32_t shift = 0x80000000U;
+	uint32_t mask = shift - 1U;
+	uint16_t reload = (1U << 8U) - 1U;
     TIM_ClearFlag(TIM1, TIM_FLAG_Update);
+    while (shift > 1U)
+    {
+    	mask = shift - 1U;
+    	if (SEC_MASK & shift)
+    	{
+    		if ((t1_count & mask) == mask)
+    		{
+    			if (SEC_ADD)
+    			{
+    				reload += 1;
+    			}
+    			else
+    			{
+    				reload -= 1;
+				}
+    		}
+    	}
+    	shift >>= 1U;
+    }
+    TIM_SetAutoreload(TIM1, reload);
     t1_count += 1;
 }
 

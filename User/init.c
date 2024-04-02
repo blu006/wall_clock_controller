@@ -112,7 +112,8 @@ void TIME_Init(void)
 	TIM_TimeBaseInitStructure.TIM_RepetitionCounter = 0U;
 	TIM_TimeBaseInit(TIM1, &TIM_TimeBaseInitStructure);
 
-	TIM_ARRPreloadConfig(TIM1, ENABLE);
+	// Auto Reload Register Shadow Register
+	//TIM_ARRPreloadConfig(TIM1, ENABLE);
 
 	// configure clock source
 	TIM_TIxExternalClockConfig(TIM1, TIM_TIxExternalCLK1Source_TI1ED,

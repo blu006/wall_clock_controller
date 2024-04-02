@@ -15,6 +15,8 @@
 #include "debug.h"
 
 extern volatile u32 t1_count;
+extern const u8 SEC_ADD;
+extern const u32 SEC_MASK;
 
 #endif /* __CH32V00x_IT_H */
 

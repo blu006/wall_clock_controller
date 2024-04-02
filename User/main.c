@@ -62,8 +62,10 @@ const u8 char_lut[] __attribute__((section(".text.consts")))=
 	0b00111001, 0b01011110, 0b01111001, 0b01110001
 };
 
-/* Macros */
+const u8 SEC_ADD __attribute__((section(".text.consts"))) = 1U;
+const u32 SEC_MASK __attribute__((section(".text.consts"))) = 0x00005800;
 
+/* Macros */
 #define C_MY_CH422_SYSTEM_PARAMETER \
 (0 << C_CH422_SP_OD_EN_OFF |\
 1 << C_CH422_SP_A_SCAN_OFF |\
@@ -111,6 +113,23 @@ u8 last_upd_bcd = 0;
 u8 last_chd[4] = { 0 };
 u8 hr_dir = 0;
 volatile u32 t1_count = 0;
+ssm_t ssmOut;
+u32 ssm_ct;
+
+h_sm_t hr_sm = h_sm_idle;
+
+u32 last_exloop_count = 0;
+u32 last_sec = 0; // there are a number of t1 counts per second
+u8 exloop_overrun = 0;
+u8 btn_vec = 0; // used by the debouncer
+u8 last_btn_vec = 0; // used by the debouncer
+u8 con_btn_vec = 0;	// used by the rising edge logic
+u8 last_c_b_vec = 0; // used by the rising edge logic
+u32 deb_btn_count = 0; // used by the debouncer
+u32 re_btn_count = 0; // used by the button down timer
+u32 btn_dly_target = 0; // used by the button down timer
+u32 hr_dir_count = 0U - C_REALLY_LONG; // used by the DST hour reversal functionality
+u8 auto_seconds = 0; // automatic seconds display
 
 /*********************************************************************
  * @fn      IIC_TX
@@ -213,11 +232,13 @@ void write_digit(u8 digit, u8 chd)
 	IIC_TX(addr, chd);
 }
 
-ssm_t ssmOut;
-u32 ssm_ct;
-
-
-h_sm_t hr_sm = h_sm_idle;
+/*********************************************************************
+ * @fn      nof_hour
+ *
+ * @brief   Natural Overflow Hour
+ *
+ * @return  none
+ */
 void nof_hour(void)
 {
 	if (bcd[1] >= 10)
@@ -233,6 +254,13 @@ void nof_hour(void)
 	}
 }
 
+/*********************************************************************
+ * @fn      nof_min_sec
+ *
+ * @brief   Natural Overflow Minutes and Seconds
+ *
+ * @return  none
+ */
 void nof_min_sec(u8 sec, u8 inh)
 {
 	if (bcd[3 + sec * 2] >= 10)
@@ -251,6 +279,13 @@ void nof_min_sec(u8 sec, u8 inh)
 	}
 }
 
+/*********************************************************************
+ * @fn      dec_hr
+ *
+ * @brief   Decrement Hour (by one)
+ *
+ * @return  none
+ */
 void dec_hr(void)
 {
 	if (bcd[1] == 0)
@@ -278,6 +313,13 @@ void dec_hr(void)
 	}
 }
 
+/*********************************************************************
+ * @fn      change_hr
+ *
+ * @brief   changes the hour based on the hour direction variable
+ *
+ * @return  none
+ */
 void change_hr(void)
 {
 	if (hr_dir == 0)
@@ -301,18 +343,6 @@ void change_hr(void)
 int main(void)
 {
 	u8 i = 0;
-	u32 last_exloop_count = 0;
-	u32 last_sec = 0; // there are a number of t1 counts per second
-	u8 exloop_overrun = 0;
-	u8 btn_vec = 0; // used by the debouncer
-	u8 last_btn_vec = 0; // used by the debouncer
-	u8 con_btn_vec = 0;	// used by the rising edge logic
-	u8 last_c_b_vec = 0; // used by the rising edge logic
-	u32 deb_btn_count = 0; // used by the debouncer
-	u32 re_btn_count = 0; // used by the button down timer
-	u32 btn_dly_target = 0; // used by the button down timer
-	u32 hr_dir_count = 0U - C_REALLY_LONG; // used by the DST hour reversal functionality
-	u8 auto_seconds = 0; // automatic seconds display
 	SystemCoreClockUpdate();
 
 	APP_GPIO_Init();
