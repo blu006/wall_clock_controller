@@ -56,20 +56,22 @@ void TIM1_UP_IRQHandler(void)
     	{
     		if ((t1_count & mask) == mask)
     		{
+    			// adding to the reload register makes the period longer and
+    			// therefore makes the clock slower
     			if (SEC_ADD)
     			{
-    				reload += 1;
+    				reload += 1U;
     			}
     			else
     			{
-    				reload -= 1;
+    				reload -= 1U;
 				}
     		}
     	}
     	shift >>= 1U;
     }
     TIM_SetAutoreload(TIM1, reload);
-    t1_count += 1;
+    t1_count += 1U;
 }
 
 
