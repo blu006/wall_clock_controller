@@ -274,11 +274,25 @@ void nof_hour(void)
 	}
 	else
 	{
+		// 13 -> 01
 		if (bcd[C_I_HR_TENS] >= 1 && bcd[C_I_HR_ONES] >= 3)
 		{
 			bcd[C_I_HR_TENS] -= 1U;
 			bcd[C_I_HR_ONES] -= 2U;
 		}
+		// 20 -> 08
+		else if (bcd[C_I_HR_TENS] == 2U && bcd[C_I_HR_ONES] == 0)
+		{
+			bcd[C_I_HR_TENS] = 0;
+			bcd[C_I_HR_ONES] = 8U;
+		}
+		// 21 -> 09
+		else if (bcd[C_I_HR_TENS] == 2U && bcd[C_I_HR_ONES] == 1U)
+		{
+			bcd[C_I_HR_TENS] = 0;
+			bcd[C_I_HR_ONES] = 9U;
+		}
+		// 00 -> 12
 		else if (bcd[C_I_HR_TENS] == 0 && bcd[C_I_HR_ONES] == 0)
 		{
 			bcd[C_I_HR_TENS] = 1U;
@@ -292,23 +306,28 @@ void nof_hour(void)
  *
  * @brief   Natural Overflow Minutes and Seconds
  *
+ * This function implements natural overflow of minutes and seconds.
+ * The function is mostly implemented using the language of minutes, but most
+ * of the logic works the same for seconds.
  * @return  none
  */
 void nof_min_sec(u8 sec, u8 inh)
 {
-	if (bcd[3 + sec * 2] >= 10)
+	if (bcd[C_I_MIN_ONES + sec * 2U] >= 10U)
 	{
-		bcd[2 + sec * 2] += 1;
-		bcd[3 + sec * 2] -= 10;
+		bcd[C_I_MIN_TENS + sec * 2U] += 1U;
+		bcd[C_I_MIN_ONES + sec * 2U] -= 10U;
 	}
 
-	if (bcd[2 + sec * 2] >= 6)
+	// 60 minutes, 60 seconds
+	if (bcd[C_I_MIN_TENS + sec * 2U] >= 6U)
 	{
+		// increment the next digit or not
 		if (!inh)
 		{
-			bcd[1 + sec * 2] += 1;
+			bcd[C_I_HR_ONES + sec * 2U] += 1U;
 		}
-		bcd[2 + sec * 2] = 0;
+		bcd[C_I_MIN_TENS + sec * 2U] = 0;
 	}
 }
 
