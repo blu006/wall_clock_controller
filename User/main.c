@@ -43,6 +43,15 @@
 
 #define C_CH422_R_IO_ADDR (0x4D)
 
+#define C_I_SEC_ONES (5U)
+#define C_I_SEC_TENS (4U)
+#define C_I_MIN_ONES (3U)
+#define C_I_MIN_TENS (2U)
+#define C_I_HR_ONES (1U)
+#define C_I_HR_TENS (0U)
+
+#define C_NUM_DIG (4U)
+
 #define C_CPS (1U << 8U)
 #define C_B_HR (1U << 1U)
 #define C_B_MIN (1U << 0U)
@@ -54,6 +63,11 @@
 #define C_SHORT_INTVL (1U << 6U)
 #define C_REALLY_LONG (C_CPS * 60U * 60U * 12U)
 
+// Character LUT
+// 0 1 2 3
+// 4 5 6 7
+// 8 9 A b
+// C d E F
 const u8 char_lut[] __attribute__((section(".text.consts")))=
 {
 	0b00111111, 0b00000110, 0b01011011, 0b01001111,
@@ -77,6 +91,8 @@ const u32 SEC_MASK __attribute__((section(".text.consts"))) = 0x00005800;
 #define HOUR ((con_btn_vec & C_B_HR) != 0)
 #define BTN_TIMER_EXPIRE (t1_count - re_btn_count >= btn_dly_target)
 #define HR_EVT (RE_HOUR || (HOUR && BTN_TIMER_EXPIRE))
+
+#define BCD_SEC (bcd[5])
 
 /* Types */
 typedef enum
@@ -130,7 +146,8 @@ u32 re_btn_count = 0; // used by the button down timer
 u32 btn_dly_target = 0; // used by the button down timer
 u32 hr_dir_count = 0U - C_REALLY_LONG; // used by the DST hour reversal functionality
 u8 auto_seconds = 0; // automatic seconds display
-
+u8 pwr_loss_ind = 1U; // indicate that the power was lost on initial startup
+u8 twelve_hour = 0;
 /*********************************************************************
  * @fn      IIC_TX
  *
@@ -241,16 +258,32 @@ void write_digit(u8 digit, u8 chd)
  */
 void nof_hour(void)
 {
-	if (bcd[1] >= 10)
+	if (bcd[C_I_HR_ONES] >= 10U)
 	{
-		bcd[0] += 1;
-		bcd[1] -= 10;
+		bcd[C_I_HR_TENS] += 1U;
+		bcd[C_I_HR_ONES] -= 10U;
 	}
 
-	if (bcd[0] == 2 && bcd[1] == 4)
+	if (twelve_hour == 0)
 	{
-		bcd[0] = 0;
-		bcd[1] = 0;
+		if (bcd[C_I_HR_TENS] >= 2 && bcd[C_I_HR_ONES] >= 4)
+		{
+			bcd[C_I_HR_TENS] = 0U;
+			bcd[C_I_HR_ONES] = 0U;
+		}
+	}
+	else
+	{
+		if (bcd[C_I_HR_TENS] >= 1 && bcd[C_I_HR_ONES] >= 3)
+		{
+			bcd[C_I_HR_TENS] -= 1U;
+			bcd[C_I_HR_ONES] -= 2U;
+		}
+		else if (bcd[C_I_HR_TENS] == 0 && bcd[C_I_HR_ONES] == 0)
+		{
+			bcd[C_I_HR_TENS] = 1U;
+			bcd[C_I_HR_ONES] = 2U;
+		}
 	}
 }
 
@@ -288,28 +321,50 @@ void nof_min_sec(u8 sec, u8 inh)
  */
 void dec_hr(void)
 {
-	if (bcd[1] == 0)
+	if (twelve_hour == 0)
 	{
-		if (bcd[0] == 0) // 00 -> 23
+		if (bcd[C_I_HR_ONES] == 0)
 		{
-			bcd[1] = 3;
-			bcd[0] = 2;
+			if (bcd[C_I_HR_TENS] == 0) // 00 -> 23
+			{
+				bcd[C_I_HR_TENS] = 2;
+				bcd[C_I_HR_ONES] = 3;
+			}
+			else if (bcd[C_I_HR_TENS] == 1) // 10 -> 09
+			{
+				bcd[C_I_HR_TENS] = 0;
+				bcd[C_I_HR_ONES] = 9;
+			}
+			else if (bcd[C_I_HR_TENS] == 2) // 20 -> 19
+			{
+				bcd[C_I_HR_TENS] = 1;
+				bcd[C_I_HR_ONES] = 9;
+			}
 		}
-		else if (bcd[0] == 1) // 10 -> 09
+		else
 		{
-			bcd[1] = 9;
-			bcd[0] = 0;
-		}
-		else if (bcd[0] == 2) // 20 -> 19
-		{
-			bcd[1] = 9;
-			bcd[0] = 1;
+			// base case, no tens underflow
+			bcd[1] -= 1;
 		}
 	}
 	else
 	{
-		// base case, no tens underflow
-		bcd[1] -= 1;
+		// 01 -> 12
+		if (bcd[C_I_HR_TENS] == 0 && bcd[C_I_HR_ONES] == 1U)
+		{
+			bcd[C_I_HR_TENS] = 1U;
+			bcd[C_I_HR_ONES] = 2U;
+		}
+		// 10 -> 09
+		else if(bcd[C_I_HR_TENS] == 1U && bcd[C_I_HR_ONES] == 0U)
+		{
+			bcd[C_I_HR_TENS] = 0;
+			bcd[C_I_HR_ONES] = 9U;
+		}
+		else
+		{
+			bcd[C_I_HR_ONES] -= 1U;
+		}
 	}
 }
 
@@ -392,6 +447,7 @@ int main(void)
 		{
 			re_btn_count = t1_count;
 			btn_dly_target = C_LONG_PRESS;
+			pwr_loss_ind = 0U;
 		}
 
 		// natural overflow
@@ -413,7 +469,7 @@ int main(void)
 			{
 				ssm_ct = t1_count;
 				ssmOut.e.state = s_sm_hold;
-				ssmOut.e.btn_ct = 1;
+				ssmOut.e.btn_ct = 1U;
 			}
 			break;
 			case s_sm_hold:
@@ -421,8 +477,8 @@ int main(void)
 			{
 				re_btn_count = t1_count - C_LONG_PRESS;
 				last_sec = t1_count;
-				bcd[5] = 0;
-				bcd[4] = 0;
+				bcd[C_I_SEC_ONES] = 0;
+				bcd[C_I_SEC_TENS] = 0;
 			}
 			if (t1_count - ssm_ct >= C_LONG_PRESS)
 			{
@@ -442,8 +498,10 @@ int main(void)
 			}
 			break;
 			case s_sm_disp:
+			// the seconds button is a combination of both hours and minutes buttons
 			if (RE_HOUR && RE_MIN)
 			{
+				// set to a really big number to avoid overflowing
 				if (ssmOut.e.btn_ct < ((1U << 6U) - 1U))
 				{
 					ssmOut.e.btn_ct += 1;
@@ -455,9 +513,13 @@ int main(void)
 			if (t1_count - ssm_ct >= C_LONG_PRESS)
 			{
 				ssmOut.e.state = s_sm_idle;
-				if (ssmOut.e.btn_ct == 2)
+				if (ssmOut.e.btn_ct == 2U)
 				{
-					auto_seconds ^= 1;
+					auto_seconds ^= 1U;
+				}
+				if (ssmOut.e.btn_ct == 4U)
+				{
+					twelve_hour ^= 1U;
 				}
 				ssmOut.e.btn_ct = 0;
 			}
@@ -544,61 +606,54 @@ int main(void)
 		}
 
 		// encode the 7-segment display data
-		for (i = 0; i < 4; i++)
+		// display seconds.
+		// the decimal points display the seconds button count for clock configuration
+		// "auto seconds" display seconds for the first 0 to 4 (fine total) seconds
+		if (disp_sec || (auto_seconds && (BCD_SEC < 5U)))
 		{
-			if (disp_sec || (auto_seconds && (bcd[5] < 5)))
+			for (i = 0; i < C_NUM_DIG; i++)
 			{
-				switch (i)
+				chd[i] = (ssmOut.e.btn_ct == (5U - i)) ? 0x80 : 0;
+			}
+			chd[2U] |= char_lut_fun(bcd[C_I_SEC_TENS] & 0xF);
+			chd[3U] |= char_lut_fun(bcd[C_I_SEC_ONES] & 0xF);
+		}
+		else
+		{
+			if (pwr_loss_ind && (BCD_SEC & 0x1))
+			{
+				for (i = 0; i < C_NUM_DIG; i++)
 				{
-				case 0:
-					chd [i] = (ssmOut.e.btn_ct == 5) ? 0x80 : 0;
-					break;
-				case 1:
-					chd[1] = (ssmOut.e.btn_ct == 4) ? 0x80 : 0;
-					break;
-				case 2:
-					chd[i] = char_lut_fun(bcd[i + 2U] & 0xF) | (ssmOut.e.btn_ct == 3 ? 0x80 : 0);
-					break;
-				case 3:
-					chd[i] = char_lut_fun(bcd[i + 2U] & 0xF) | (ssmOut.e.btn_ct == 2 ? 0x80 : 0);
-					break;
+					chd[i] = 0;
 				}
 			}
 			else
 			{
-				switch (i)
+				for (i = 0; i < C_NUM_DIG; i++)
 				{
-				case 0:
 					chd[i] = char_lut_fun(bcd[i] & 0xF);
-					break;
-				case 1:
-					chd[i] = char_lut_fun(bcd[i] & 0xF) | (exloop_overrun ? 0x80 : 0);
-					break;
-				case 2:
-					chd[i] = char_lut_fun(bcd[i] & 0xF);
-					break;
-				case 3:
-					chd[i] = char_lut_fun(bcd[i] & 0xF) | (auto_seconds ? 0x80 : 0);
-					break;
 				}
+				chd[1U] |= (exloop_overrun ? 0x80 : 0);
+				chd[3U] |= (auto_seconds ? 0x80 : 0);
 			}
 		}
 
 		// send 7-segment display data
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < 4U; i++)
 		{
-			if (last_chd[i] != chd[i] || (bcd[5] == i && bcd[5] != last_upd_bcd))
+			// if the character changed or our "clock pointer"
+			if (last_chd[i] != chd[i] || (BCD_SEC == i && BCD_SEC != last_upd_bcd))
 			{
 				write_digit(i, chd[i]);
 				last_chd[i] = chd[i];
-				last_upd_bcd = bcd[5];
+				last_upd_bcd = BCD_SEC;
 			}
 		}
 
 		// increment the seconds based on t1
 		if (t1_count - last_sec >= C_CPS)
 		{
-			bcd[5] += 1;
+			BCD_SEC += 1;
 			last_sec += C_CPS;
 		}
 
