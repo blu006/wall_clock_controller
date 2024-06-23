@@ -61,7 +61,7 @@
 #define C_B_MASK ((1U << (C_B_NUM + 1)) - 1U)
 #define C_LONG_PRESS (C_CPS * 3U)
 #define C_SHORT_INTVL (1U << 6U)
-#define C_REALLY_LONG (C_CPS * 60U * 60U * 12U)
+#define C_REALLY_LONG (C_CPS * 60U * 60U * 1U)
 
 // Character LUT
 // 0 1 2 3
@@ -91,6 +91,7 @@ const u32 SEC_MASK __attribute__((section(".text.consts"))) = 0x00005800;
 #define HOUR ((con_btn_vec & C_B_HR) != 0)
 #define BTN_TIMER_EXPIRE (t1_count - re_btn_count >= btn_dly_target)
 #define HR_EVT (RE_HOUR || (HOUR && BTN_TIMER_EXPIRE))
+#define MIN_EVT (RE_MIN || (MIN && BTN_TIMER_EXPIRE))
 
 #define BCD_SEC (bcd[5])
 
@@ -430,7 +431,7 @@ int main(void)
 
 	// start time
 	TIM_Cmd(TIM1, ENABLE);
-	while (1)
+	while (1U)
 	{
 		u8 disp_sec = 0;
 
@@ -523,9 +524,14 @@ int main(void)
 				// set to a really big number to avoid overflowing
 				if (ssmOut.e.btn_ct < ((1U << 6U) - 1U))
 				{
-					ssmOut.e.btn_ct += 1;
+					ssmOut.e.btn_ct += 1U;
 				}
 				ssm_ct = t1_count;
+			}
+			else if (RE_HOUR || RE_MIN)
+			{
+				ssmOut.e.state = s_sm_idle;
+				ssmOut.e.btn_ct = 0;
 			}
 			// timeout seconds display
 			// and apply selected setting
@@ -550,7 +556,7 @@ int main(void)
 		// a combination of both hour and minute buttons
 		if (ssmOut.e.state != s_sm_idle)
 		{
-			disp_sec = 1;
+			disp_sec = 1U;
 		}
 		else
 		{
@@ -568,7 +574,7 @@ int main(void)
 					break;
 				case h_sm_single:
 					// reverse hour direction
-					hr_dir ^= 1;
+					hr_dir ^= 1U;
 					change_hr();
 					change_hr();
 					hr_dir_count = t1_count;
@@ -603,10 +609,10 @@ int main(void)
 			}
 
 			// process minutes
-			if (RE_MIN || (MIN && BTN_TIMER_EXPIRE))
+			if (MIN_EVT)
 			{
-				bcd[3] += 1;
-				nof_min_sec(0, 1);
+				bcd[C_I_MIN_ONES] += 1U;
+				nof_min_sec(0, 1U);
 				auto_seconds = 0;
 				if (BTN_TIMER_EXPIRE)
 				{
@@ -620,7 +626,7 @@ int main(void)
 		if (t1_count - hr_dir_count >= C_REALLY_LONG)
 		{
 			// overflow prevention? is it necessary?
-			// hr_dir_count = t1_count - C_REALLY_LONG;
+			hr_dir_count = t1_count - C_REALLY_LONG;
 			hr_sm = h_sm_idle;
 		}
 
@@ -650,7 +656,15 @@ int main(void)
 			{
 				for (i = 0; i < C_NUM_DIG; i++)
 				{
-					chd[i] = char_lut_fun(bcd[i] & 0xF);
+					// leading 0 is omitted in twelve hour mode
+					if (twelve_hour != 0 && i == C_I_HR_TENS && bcd[i] == 0)
+					{
+						chd[i] = 0;
+					}
+					else
+					{
+						chd[i] = char_lut_fun(bcd[i] & 0xF);
+					}
 				}
 				chd[1U] |= (exloop_overrun ? 0x80 : 0);
 				chd[3U] |= (auto_seconds ? 0x80 : 0);
@@ -672,7 +686,7 @@ int main(void)
 		// increment the seconds based on t1
 		if (t1_count - last_sec >= C_CPS)
 		{
-			BCD_SEC += 1;
+			BCD_SEC += 1U;
 			last_sec += C_CPS;
 		}
 
