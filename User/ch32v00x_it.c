@@ -54,6 +54,9 @@ void TIM1_UP_IRQHandler(void)
     	mask = shift - 1U;
     	if (SEC_MASK & shift)
     	{
+    		// perform the operation once per "shift" cycle
+    		// the easiest way to do this is to mask it and compare it with the mask value
+    		// it is also possible to compare this with 0
     		if ((t1_count & mask) == mask)
     		{
     			// adding to the reload register makes the period longer and
